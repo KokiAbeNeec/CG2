@@ -249,10 +249,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	// 頂点データ
 	Vertex vertices[] = {
 		// x      y     z       u     v
-		{{-50.0f, -50.0f, 50.0f}, {0.0f, 1.0f}}, // 左下
-		{{-50.0f,  50.0f, 50.0f}, {0.0f, 0.0f}}, // 左上
-		{{ 50.0f, -50.0f, 50.0f}, {1.0f, 1.0f}}, // 右下
-		{{ 50.0f,  50.0f, 50.0f}, {1.0f, 0.0f}}, // 右上
+		{{-50.0f, -50.0f, 0.0f}, {0.0f, 1.0f}}, // 左下
+		{{-50.0f,  50.0f, 0.0f}, {0.0f, 0.0f}}, // 左上
+		{{ 50.0f, -50.0f, 0.0f}, {1.0f, 1.0f}}, // 右下
+		{{ 50.0f,  50.0f, 0.0f}, {1.0f, 0.0f}}, // 右上
 	};
 
 	// 頂点データ全体のサイズ = 頂点データ一つ分のサイズ * 頂点データの要素数
@@ -265,6 +265,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		1, 2, 3, // 三角形2つ目
 	};
 
+	float angle = 0.0f;			// カメラの回転角
 
 	// 頂点バッファの設定
 	D3D12_HEAP_PROPERTIES heapProp{};   // ヒープ設定
@@ -522,41 +523,47 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		result = constBuffTransform->Map(0, nullptr, (void**)&constMapTransform); // マッピング
 		assert(SUCCEEDED(result));
 
-		// 単位行列を代入
-		constMapTransform->mat = XMMatrixIdentity();
-
-		// 平行投影行列の計算
-		//constMapTransform->mat.r[0].m128_f32[0] = 2.0f / 1280;
-		//constMapTransform->mat.r[1].m128_f32[1] = -2.0f / 720;
-		//constMapTransform->mat.r[3].m128_f32[0] = -1.0f;
-		//constMapTransform->mat.r[3].m128_f32[1] = 1.0f;
-		constMapTransform->mat = XMMatrixOrthographicOffCenterLH(
-			2.0f / 1280, -2.0f / 720,
-			-1.0f, 1.0f,
-			0.0f, 1.0f
-		);
-
-		// 透視投影変換行列の計算
-		constMapTransform->mat = XMMatrixPerspectiveFovLH(
-			XMConvertToRadians(45.0f),
-			(float)1280 / 720,
-			0.1f, 1000.f
-		);
-
-		// 投影変換行列（透視投影）
-		XMMATRIX matProjection =
-		XMMatrixPerspectiveFovLH(
-			XMConvertToRadians(45.0f),
-			(float)window_width / window_height,
-			0.1f, 1000.f
-		);
-
-		//
-
-		// 定数バッファに転送
-		constMapTransform->mat = matProjection;
 	}
+		
+	// 単位行列を代入
+	constMapTransform->mat = XMMatrixIdentity();
 
+	// 平行投影行列の計算
+	//constMapTransform->mat.r[0].m128_f32[0] = 2.0f / 1280;
+	//constMapTransform->mat.r[1].m128_f32[1] = -2.0f / 720;
+	//constMapTransform->mat.r[3].m128_f32[0] = -1.0f;
+	//constMapTransform->mat.r[3].m128_f32[1] = 1.0f;
+	constMapTransform->mat = XMMatrixOrthographicOffCenterLH(
+		2.0f / 1280, -2.0f / 720,
+		-1.0f, 1.0f,
+		0.0f, 1.0f
+	);
+
+	// 透視投影変換行列の計算
+	constMapTransform->mat = XMMatrixPerspectiveFovLH(
+		XMConvertToRadians(45.0f),
+		(float)1280 / 720,
+		0.1f, 1000.f
+	);
+
+	// 投影変換行列（透視投影）
+	XMMATRIX matProjection =
+	XMMatrixPerspectiveFovLH(
+		XMConvertToRadians(45.0f),
+		(float)window_width / window_height,
+		0.1f, 1000.f
+	);
+
+	// ビュー変換行列
+	XMMATRIX matView;
+	XMFLOAT3 eye(0, 0, -100);	// 視点座標
+	XMFLOAT3 target(0, 0, 0);	// 注視点座標
+	XMFLOAT3 up(0, 1, 0);		// 上方向ベクトル
+	matView = XMMatrixLookAtLH(XMLoadFloat3(&eye), XMLoadFloat3(&target), XMLoadFloat3(&up));
+
+	// 定数バッファに転送
+	constMapTransform->mat = matView * matProjection;
+	
 	// ヒープ設定
 	D3D12_HEAP_PROPERTIES cbHeapProp{};
 	cbHeapProp.Type = D3D12_HEAP_TYPE_UPLOAD;                   // GPUへの転送用
@@ -742,7 +749,21 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		BYTE key[256] = {};
 		keyboard->GetDeviceState(sizeof(key), key);
 
+		if (key[DIK_D] || key[DIK_A])
+		{
+			if (key[DIK_D]) { angle += XMConvertToRadians(1.0f); }
+			else if (key[DIK_A]) { angle -= XMConvertToRadians(1.0f); }
 
+			// angleラジアンだけY軸まわりに回転 半径は-100
+			eye.x = -100 * sinf(angle);
+			eye.z = -100 * cosf(angle);
+
+			// ビュー変換行列を作り直す
+			matView = XMMatrixLookAtLH(XMLoadFloat3(&eye), XMLoadFloat3(&target), XMLoadFloat3(&up));
+		}
+
+		// 定数バッファに転送
+		constMapTransform->mat = matView * matProjection;
 
 		// バックバッファの番号を取得（2つなので0番か1番）
 		UINT bbIndex = swapChain->GetCurrentBackBufferIndex();
