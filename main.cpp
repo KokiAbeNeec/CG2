@@ -561,9 +561,36 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	XMFLOAT3 up(0, 1, 0);		// 上方向ベクトル
 	matView = XMMatrixLookAtLH(XMLoadFloat3(&eye), XMLoadFloat3(&target), XMLoadFloat3(&up));
 
+	// ワールド変換行列
+	XMMATRIX matWorld;
+	//matWorld = XMMatrixIdentity();
+	//XMMATRIX matScale;		// スケーリング行列
+	//matScale = XMMatrixScaling(1.0f, 0.5f, 1.0f);
+	//matWorld *= matScale;	// ワールド行列にスケーリングを反映
+	//XMMATRIX matRot;		// 回転行列
+	//matRot = XMMatrixIdentity();
+	//matRot *= XMMatrixRotationZ(XMConvertToRadians(0.0f));	// Z軸まわりに0度回転してから
+	//matRot *= XMMatrixRotationX(XMConvertToRadians(15.0f));	// X軸まわりに15度回転してから
+	//matRot *= XMMatrixRotationY(XMConvertToRadians(45.0f));	// Y軸まわりに30度回転
+	//matWorld *= matRot;		// ワールド行列に回転を反映
+	//XMMATRIX matTrans;		// 平行移動行列
+	//matTrans = XMMatrixTranslation(-50.0f, 0, 0);	// (-50,0,0)平行移動
+	//matWorld *= matTrans;	// ワールド行列に平行移動を反映
+
 	// 定数バッファに転送
-	constMapTransform->mat = matView * matProjection;
+	constMapTransform->mat = matWorld * matView * matProjection;
 	
+	// スケーリング倍率
+	XMFLOAT3 scale;
+	// 回転角
+	XMFLOAT3 rotation;
+	// 座標
+	XMFLOAT3 position;
+
+	scale = { 1.0f,1.0f,1.0f };
+	rotation = { 0.0f,0.0f,0.0f };
+	position = { 0.0f,0.0f,0.0f };
+
 	// ヒープ設定
 	D3D12_HEAP_PROPERTIES cbHeapProp{};
 	cbHeapProp.Type = D3D12_HEAP_TYPE_UPLOAD;                   // GPUへの転送用
@@ -762,8 +789,31 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			matView = XMMatrixLookAtLH(XMLoadFloat3(&eye), XMLoadFloat3(&target), XMLoadFloat3(&up));
 		}
 
+		if (key[DIK_UP] || key[DIK_DOWN] || key[DIK_RIGHT] || key[DIK_LEFT])
+		{
+			// 座標を移動する処理（Z座標）
+			if (key[DIK_UP]) { position.z += 1.0f; }
+			else if (key[DIK_DOWN]) { position.z -= 1.0f; }
+			if (key[DIK_RIGHT]) { position.x += 1.0f; }
+			else if (key[DIK_LEFT]) { position.x -= 1.0f; }
+		}
+
+		XMMATRIX matScale;		// スケーリング行列
+		matScale = XMMatrixScaling(scale.x, scale.y, scale.z);
+		XMMATRIX matRot;		// 回転行列
+		matRot = XMMatrixIdentity();
+		matRot *= XMMatrixRotationZ(rotation.z);	// Z軸まわりに0度回転してから
+		matRot *= XMMatrixRotationX(rotation.x);	// X軸まわりに15度回転してから
+		matRot *= XMMatrixRotationY(rotation.y);	// Y軸まわりに30度回転
+		XMMATRIX matTrans;		// 平行移動行列
+		matTrans = XMMatrixTranslation(position.x, position.y, position.z);
+		matWorld = XMMatrixIdentity();
+		matWorld *= matScale;	// ワールド行列にスケーリングを反映
+		matWorld *= matRot;		// ワールド行列に回転を反映
+		matWorld *= matTrans;	// ワールド行列に平行移動を反映
+
 		// 定数バッファに転送
-		constMapTransform->mat = matView * matProjection;
+		constMapTransform->mat = matWorld * matView * matProjection;
 
 		// バックバッファの番号を取得（2つなので0番か1番）
 		UINT bbIndex = swapChain->GetCurrentBackBufferIndex();
